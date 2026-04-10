@@ -1,0 +1,4 @@
+dao/CarroDAO.class
+service/CarroService.class
+app/Aplicacao.class
+model/Carro.class
