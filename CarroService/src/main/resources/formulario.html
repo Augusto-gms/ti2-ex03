@@ -1,0 +1,303 @@
+<html>
+<head>
+<meta content="text/html; charset=UTF-8" http-equiv="content-type">
+<title>Controle de Carros</title>
+</head>
+<script type="text/javascript">
+
+// Função corrigida para adicionar ID ao path da URL
+function addIdToPath(form_name, base_url){
+    var your_form = document.getElementById(form_name);
+    var id = your_form.elements.namedItem("id").value;
+    if (!id) {
+        alert("Por favor, digite um ID!");
+        return false;
+    }
+    var action_src = base_url + id;
+    your_form.action = action_src;
+    return true;
+}
+
+// Função para consultar carro (melhorada)
+function consultarCarro() {
+    var id = document.getElementById("consult-id").value;
+    if (!id) {
+        alert("Digite um ID para consultar!");
+        return;
+    }
+    
+    fetch('http://localhost:6789/carro/' + id)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Carro não encontrado');
+            }
+            return response.text();
+        })
+        .then(xmlText => {
+            var parser = new DOMParser();
+            var xmlDoc = parser.parseFromString(xmlText, "text/xml");
+            var carro = xmlDoc.getElementsByTagName("carro")[0];
+            if (carro) {
+                document.getElementById("result-id").innerText = carro.getElementsByTagName("id")[0].textContent;
+                document.getElementById("result-modelo").innerText = carro.getElementsByTagName("modelo")[0].textContent;
+                document.getElementById("result-marca").innerText = carro.getElementsByTagName("marca")[0].textContent;
+                document.getElementById("result-tipo").innerText = carro.getElementsByTagName("tipo")[0].textContent;
+                document.getElementById("carro-result").style.visibility = "visible";
+            }
+        })
+        .catch(error => {
+            alert("Erro: " + error.message);
+            document.getElementById("carro-result").style.visibility = "hidden";
+        });
+}
+
+// Função para listar todos os carros
+function listarTodosCarros() {
+    fetch('http://localhost:6789/carro')
+        .then(response => response.text())
+        .then(xmlText => {
+            var parser = new DOMParser();
+            var xmlDoc = parser.parseFromString(xmlText, "text/xml");
+            var carros = xmlDoc.getElementsByTagName("carro");
+            if (carros.length === 0) {
+                document.getElementById("lista-carros").innerHTML = "<tr><td colspan='4'>Nenhum carro cadastrado</td></tr>";
+            } else {
+                var html = "";
+                for (var i = 0; i < carros.length; i++) {
+                    var id = carros[i].getElementsByTagName("id")[0].textContent;
+                    var modelo = carros[i].getElementsByTagName("modelo")[0].textContent;
+                    var marca = carros[i].getElementsByTagName("marca")[0].textContent;
+                    var tipo = carros[i].getElementsByTagName("tipo")[0].textContent;
+                    html += "<tr><td>" + id + "</td><td>" + modelo + "</td><td>" + marca + "</td><td>" + tipo + "</td></tr>";
+                }
+                document.getElementById("lista-carros").innerHTML = html;
+            }
+            document.getElementById("lista-section").style.visibility = "visible";
+        })
+        .catch(error => {
+            alert("Erro ao listar carros: " + error.message);
+        });
+}
+
+function limparResultado() {
+    document.getElementById("carro-result").style.visibility = "hidden";
+}
+
+// Função para mostrar mensagem após submit do formulário
+function showMessage(message, isError = false) {
+    var msgDiv = document.getElementById("message-area");
+    if (!msgDiv) {
+        msgDiv = document.createElement("div");
+        msgDiv.id = "message-area";
+        msgDiv.style.position = "fixed";
+        msgDiv.style.top = "10px";
+        msgDiv.style.right = "10px";
+        msgDiv.style.padding = "10px";
+        msgDiv.style.borderRadius = "5px";
+        msgDiv.style.zIndex = "1000";
+        document.body.appendChild(msgDiv);
+    }
+    msgDiv.style.backgroundColor = isError ? "#ff4444" : "#44aa44";
+    msgDiv.style.color = "white";
+    msgDiv.innerHTML = message;
+    msgDiv.style.display = "block";
+    setTimeout(() => {
+        msgDiv.style.display = "none";
+    }, 3000);
+}
+
+// Interceptar submit dos formulários GET para mostrar resultado
+document.addEventListener('DOMContentLoaded', function() {
+    // Formulário de remoção
+    var deleteForm = document.getElementById('form-delete');
+    if (deleteForm) {
+        deleteForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var id = this.elements.namedItem("id").value;
+            if (!id) {
+                alert("Digite um ID para remover!");
+                return;
+            }
+            fetch('http://localhost:6789/carro/delete/' + id)
+                .then(response => response.text())
+                .then(data => {
+                    if (data.includes("não encontrado")) {
+                        showMessage("Erro: " + data, true);
+                    } else {
+                        showMessage("Carro " + id + " removido com sucesso!");
+                        // Recarregar lista se estiver visível
+                        if (document.getElementById("lista-section").style.visibility === "visible") {
+                            listarTodosCarros();
+                        }
+                    }
+                })
+                .catch(error => showMessage("Erro: " + error.message, true));
+        });
+    }
+    
+    // Formulário de atualização
+    var updateForm = document.getElementById('form-update');
+    if (updateForm) {
+        updateForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var id = this.elements.namedItem("id").value;
+            if (!id) {
+                alert("Digite um ID para atualizar!");
+                return;
+            }
+            var params = new URLSearchParams();
+            var modelo = this.elements.namedItem("modelo").value;
+            var marca = this.elements.namedItem("marca").value;
+            var tipo = this.elements.namedItem("tipo").value;
+            if (modelo) params.append("modelo", modelo);
+            if (marca) params.append("marca", marca);
+            if (tipo) params.append("tipo", tipo);
+            
+            var url = 'http://localhost:6789/carro/update/' + id;
+            if (params.toString()) {
+                url += "?" + params.toString();
+            }
+            fetch(url)
+                .then(response => response.text())
+                .then(data => {
+                    if (data.includes("não encontrado")) {
+                        showMessage("Erro: " + data, true);
+                    } else {
+                        showMessage("Carro " + id + " atualizado com sucesso!");
+                        // Limpar campos
+                        updateForm.reset();
+                        // Recarregar dados
+                        if (document.getElementById("lista-section").style.visibility === "visible") {
+                            listarTodosCarros();
+                        }
+                    }
+                })
+                .catch(error => showMessage("Erro: " + error.message, true));
+        });
+    }
+    
+    // Formulário de inserção
+    var addForm = document.getElementById('form-add');
+    if (addForm) {
+        addForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var modelo = this.elements.namedItem("modelo").value;
+            var marca = this.elements.namedItem("marca").value;
+            var tipo = this.elements.namedItem("tipo").value;
+            if (!modelo || !marca || !tipo) {
+                alert("Preencha todos os campos!");
+                return;
+            }
+            var params = new URLSearchParams();
+            params.append("modelo", modelo);
+            params.append("marca", marca);
+            params.append("tipo", tipo);
+            
+            fetch('http://localhost:6789/carro', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: params
+            })
+                .then(response => response.text())
+                .then(id => {
+                    showMessage("Carro cadastrado com ID: " + id);
+                    addForm.reset();
+                    // Recarregar lista se estiver visível
+                    if (document.getElementById("lista-section").style.visibility === "visible") {
+                        listarTodosCarros();
+                    }
+                })
+                .catch(error => showMessage("Erro ao cadastrar: " + error.message, true));
+        });
+    }
+});
+</script>
+<body>
+    <p><h1>Controle de Carros</h1></p>
+    
+    <!-- Área para mensagens -->
+    
+    <section class="section--container__responsive">
+        <section class="section--mainrow__responsive first--section">
+            <h1 class="generaltext">Inserir Carro</h1>
+            <form class="form--register" id="form-add">
+                <p>Modelo:</p><input class="input--register" type="text" name="modelo" value="" placeholder="Ex: Civic, Corolla, Gol...">
+                <p>Marca:</p><input class="input--register" type="text" name="marca" value="" placeholder="Ex: Honda, Toyota, Volkswagen...">
+                <p>Tipo:</p><input class="input--register" type="text" name="tipo" value="" placeholder="Ex: hatch, sedan, suv, picape...">
+                <input type="submit" value="cadastrar" class="input--main__style input--button">
+            </form>
+        </section>
+    </section>
+    
+    <section class="section--container__responsive">
+        <section class="section--row__responsive">
+            <h1 class="generaltext">Consultar Carro</h1>
+            <div>
+                <input class="input--down" type="text" id="consult-id" value="" placeholder="id do carro..."> 
+                <button onclick="consultarCarro()" class="input--consult__style input--button">consultar</button>
+            </div>
+        </section>
+        
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+        
+        <section class="section--row__responsive">
+            <h1 class="generaltext">Remover Carro</h1>
+            <form id="form-delete">
+                <input class="input--down" type="text" name="id" id="delete-id" value="" placeholder="id do carro...">
+                <input type="submit" value="remover" class="input--remove__style input--button">
+            </form>
+        </section>
+        
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+
+        <section class="section--row__responsive">
+            <h1 class="generaltext">Atualizar Carro</h1>
+            <form id="form-update">
+                <input class="input--down" type="text" name="id" value="" placeholder="id do carro...">
+                <input class="input--down" type="text" name="modelo" value="" placeholder="novo modelo (opcional)">
+                <input class="input--down" type="text" name="marca" value="" placeholder="nova marca (opcional)">
+                <input class="input--down" type="text" name="tipo" value="" placeholder="novo tipo (opcional)">
+                <input type="submit" value="atualizar" class="input--consult__style input--button">
+            </form>
+        </section>
+    </section>
+
+    <section class="section--container__responsive">
+        <section class="section--row__responsive">
+            <h1 class="generaltext">Listar Carros</h1>
+            <button onclick="listarTodosCarros()" class="input--consult__style input--button">todos</button>
+        </section>
+    </section>
+
+    <section class="section--container__responsive" style="visibility: hidden" id="carro-result">
+        <table border="1">
+            <tr><th>ID</th><td><span id="result-id">-</span></td></tr>
+            <tr><th>Modelo</th><td><span id="result-modelo">-</span><\/td></tr>
+            <tr><th>Marca</th><td><span id="result-marca">-</span><\/td></tr>
+            <tr><th>Tipo</th><td><span id="result-tipo">-</span><\/td></tr>
+        </table>
+        <br><button onclick="limparResultado()" class="input--button">Limpar</button>
+    </section>
+
+    <section class="section--container__responsive" style="visibility: hidden" id="lista-section">
+        <div><h2>Lista de Carros Cadastrados</h2>
+        <table border="1"><thead><tr><th>ID</th><th>Modelo</th><th>Marca</th><th>Tipo</th></tr></thead>
+        <tbody id="lista-carros"></tbody></table></div>
+    </section>
+
+    <style>
+*{box-sizing:border-box}body{background-color:white}.generaltext,p,h1,h2{font-family:Arial;text-align:center}
+.section--container__responsive{display:flex;flex-direction:row;justify-content:center;align-items:center;border-bottom:dashed;border-color:gray;padding:20px;flex-wrap:wrap}
+.input--down{display:block;margin:0px auto;margin-bottom:10px}
+.input--main__style{background-color:#00FF00;color:black}
+.input--remove__style{background-color:red}
+.input--consult__style{background-color:darkblue}
+.input--button{font-weight:bold;font-family:Arial;font-size:medium;border-color:transparent;display:block;margin:0px auto;margin-bottom:10px;color:white;padding:10px 20px;border-radius:7px;cursor:pointer}
+.input--register{display:inline}
+input{display:block;border-radius:7px;padding:10px;border-style:solid;border-color:lightgray;color:black;margin-bottom:10px;width:100%}
+form p{text-align:initial;display:inline;margin-left:15px}
+table{margin:0 auto;border-collapse:collapse}th,td{padding:10px;text-align:left}
+button{margin-top:10px}
+</style>
+</body>
+</html>
